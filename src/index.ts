@@ -18,6 +18,7 @@ app.use(cors({
             'http://localhost:5175',
             'http://localhost:3000',
             'http://localhost:5190',
+            'https://ai-web-builder-frontend.vercel.app',
         ];
         // Allow requests with no origin (curl, mobile apps)
         if (!origin) return callback(null, true);
