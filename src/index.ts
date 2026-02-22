@@ -116,10 +116,10 @@ app.post("/chat", async (req, res) => {
             }))
         ];
 
-        // Try primary model, then fallback
+        // Try primary model (8b for speed and availability), then fallback (70b)
         const models = [
-            { name: "llama-3.3-70b-versatile", maxTokens: 8000 },
             { name: "llama-3.1-8b-instant", maxTokens: 8000 },
+            { name: "llama-3.3-70b-versatile", maxTokens: 8000 },
         ];
 
         let lastError: any = null;
