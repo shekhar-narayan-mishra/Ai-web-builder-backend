@@ -100,12 +100,19 @@ app.post("/template", async (req, res) => {
 });
 
 app.post("/chat", async (req, res) => {
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
     try {
-        console.log("💬 Chat request received");
+        console.log("💬 Streaming chat request received");
 
         const requestMessages = req.body.messages;
         if (!requestMessages || !Array.isArray(requestMessages)) {
-            return res.status(400).json({ message: "Messages required" });
+            res.write(`data: ${JSON.stringify({ error: "Messages required" })}\n\n`);
+            res.end();
+            return;
         }
 
         const apiMessages = [
@@ -116,45 +123,53 @@ app.post("/chat", async (req, res) => {
             }))
         ];
 
-        // Try primary model (8b for speed and availability), then fallback (70b)
         const models = [
             { name: "llama-3.1-8b-instant", maxTokens: 8000 },
             { name: "llama-3.3-70b-versatile", maxTokens: 8000 },
         ];
 
-        let lastError: any = null;
-
+        let success = false;
         for (const model of models) {
             try {
-                console.log(`🤖 Trying model: ${model.name}`);
-                const completion = await groq.chat.completions.create({
+                console.log(`🤖 Streaming with model: ${model.name}`);
+                const stream = await groq.chat.completions.create({
                     messages: apiMessages,
                     model: model.name,
                     max_tokens: model.maxTokens,
                     temperature: 0.1,
+                    stream: true,
                 });
 
-                const response = completion.choices[0]?.message?.content || "";
-                console.log(`✅ Chat response received from ${model.name} (${response.length} chars)`);
-                res.json({ response });
-                return;
+                let fullResponse = "";
+                for await (const chunk of stream) {
+                    const content = chunk.choices[0]?.delta?.content || "";
+                    if (content) {
+                        fullResponse += content;
+                        res.write(`data: ${JSON.stringify({ chunk: content })}\n\n`);
+                    }
+                }
+
+                console.log(`✅ Stream finished from ${model.name} (${fullResponse.length} chars)`);
+                res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+                res.end();
+                success = true;
+                break;
             } catch (modelError: any) {
-                console.error(`❌ Model ${model.name} failed:`, modelError?.message || modelError);
-                lastError = modelError;
-                // Continue to fallback model
+                console.error(`❌ Model ${model.name} stream failed:`, modelError?.message || modelError);
+                // If it's the last model, we fail, otherwise continue to next
+                if (model === models[models.length - 1]) {
+                    const errMsg = modelError?.message || "Stream error";
+                    res.write(`data: ${JSON.stringify({ error: `Chat error: ${errMsg}` })}\n\n`);
+                    res.end();
+                }
             }
         }
 
-        // All models failed
-        const errMsg = lastError?.message || lastError?.error?.message || "Unknown error";
-        const errStatus = lastError?.status || 500;
-        console.error("❌ All models failed. Last error:", errMsg);
-        res.status(errStatus).json({ message: `Chat error: ${errMsg}` });
-
     } catch (error: any) {
-        const errMsg = error?.message || error?.error?.message || "Unknown error";
-        console.error("Chat error:", errMsg, error);
-        res.status(500).json({ message: `Chat error: ${errMsg}` });
+        const errMsg = error?.message || "Unknown error";
+        console.error("Chat error:", errMsg);
+        res.write(`data: ${JSON.stringify({ error: `Chat error: ${errMsg}` })}\n\n`);
+        res.end();
     }
 });
 
