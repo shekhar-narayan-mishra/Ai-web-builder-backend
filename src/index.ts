@@ -105,6 +105,8 @@ app.post("/chat", async (req, res) => {
 
         const models = [
             { name: "llama-3.1-8b-instant", maxTokens: 8000 },
+            { name: "llama-3.2-11b-vision-preview", maxTokens: 8000 },
+            { name: "llama-3.2-3b-preview", maxTokens: 8000 },
             { name: "mixtral-8x7b-32768", maxTokens: 8000 },
             { name: "llama3-8b-8192", maxTokens: 8000 },
             { name: "llama-3.3-70b-versatile", maxTokens: 8000 },
