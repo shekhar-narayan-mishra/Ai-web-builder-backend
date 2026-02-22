@@ -108,27 +108,53 @@ app.post("/chat", async (req, res) => {
             return res.status(400).json({ message: "Messages required" });
         }
 
-        const completion = await groq.chat.completions.create({
-            messages: [
-                { role: "system", content: getSystemPrompt() },
-                ...requestMessages.map((msg: any) => ({
-                    role: msg.role,
-                    content: msg.content
-                }))
-            ],
-            model: "llama-3.3-70b-versatile",
-            max_tokens: 16000,
-            temperature: 0.1,
-        });
+        const apiMessages = [
+            { role: "system" as const, content: getSystemPrompt() },
+            ...requestMessages.map((msg: any) => ({
+                role: msg.role as "user" | "assistant",
+                content: msg.content as string
+            }))
+        ];
 
-        const response = completion.choices[0]?.message?.content || "";
+        // Try primary model, then fallback
+        const models = [
+            { name: "llama-3.3-70b-versatile", maxTokens: 8000 },
+            { name: "llama-3.1-8b-instant", maxTokens: 8000 },
+        ];
 
-        console.log("✅ Chat response received");
-        res.json({ response });
+        let lastError: any = null;
 
-    } catch (error) {
-        console.error("Chat error:", error);
-        res.status(500).json({ message: "Chat error" });
+        for (const model of models) {
+            try {
+                console.log(`🤖 Trying model: ${model.name}`);
+                const completion = await groq.chat.completions.create({
+                    messages: apiMessages,
+                    model: model.name,
+                    max_tokens: model.maxTokens,
+                    temperature: 0.1,
+                });
+
+                const response = completion.choices[0]?.message?.content || "";
+                console.log(`✅ Chat response received from ${model.name} (${response.length} chars)`);
+                res.json({ response });
+                return;
+            } catch (modelError: any) {
+                console.error(`❌ Model ${model.name} failed:`, modelError?.message || modelError);
+                lastError = modelError;
+                // Continue to fallback model
+            }
+        }
+
+        // All models failed
+        const errMsg = lastError?.message || lastError?.error?.message || "Unknown error";
+        const errStatus = lastError?.status || 500;
+        console.error("❌ All models failed. Last error:", errMsg);
+        res.status(errStatus).json({ message: `Chat error: ${errMsg}` });
+
+    } catch (error: any) {
+        const errMsg = error?.message || error?.error?.message || "Unknown error";
+        console.error("Chat error:", errMsg, error);
+        res.status(500).json({ message: `Chat error: ${errMsg}` });
     }
 });
 
