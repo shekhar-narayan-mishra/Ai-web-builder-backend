@@ -126,17 +126,25 @@ app.post("/chat", async (req, res) => {
         const models = [
             { name: "llama-3.1-8b-instant", maxTokens: 8000 },
             { name: "llama-3.3-70b-versatile", maxTokens: 8000 },
+            { name: "llama3-8b-8192", maxTokens: 8000 },
+            { name: "mixtral-8x7b-32768", maxTokens: 8000 },
         ];
 
         let success = false;
+        let lastError = "";
+
         for (const model of models) {
             try {
-                console.log(`🤖 Streaming with model: ${model.name}`);
+                console.log(`🤖 Attempting stream with model: ${model.name}`);
+
+                // Send an initial event with the model name so frontend knows what is happening
+                res.write(`data: ${JSON.stringify({ model: model.name, status: "starting" })}\n\n`);
+
                 const stream = await groq.chat.completions.create({
                     messages: apiMessages,
                     model: model.name,
                     max_tokens: model.maxTokens,
-                    temperature: 0.1,
+                    temperature: 0.2,
                     stream: true,
                 });
 
@@ -145,29 +153,40 @@ app.post("/chat", async (req, res) => {
                     const content = chunk.choices[0]?.delta?.content || "";
                     if (content) {
                         fullResponse += content;
-                        res.write(`data: ${JSON.stringify({ chunk: content })}\n\n`);
+                        res.write(`data: ${JSON.stringify({ chunk: content, model: model.name })}\n\n`);
                     }
                 }
 
                 console.log(`✅ Stream finished from ${model.name} (${fullResponse.length} chars)`);
-                res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+                res.write(`data: ${JSON.stringify({ done: true, model: model.name })}\n\n`);
                 res.end();
                 success = true;
                 break;
             } catch (modelError: any) {
-                console.error(`❌ Model ${model.name} stream failed:`, modelError?.message || modelError);
-                // If it's the last model, we fail, otherwise continue to next
-                if (model === models[models.length - 1]) {
-                    const errMsg = modelError?.message || "Stream error";
-                    res.write(`data: ${JSON.stringify({ error: `Chat error: ${errMsg}` })}\n\n`);
-                    res.end();
+                const status = modelError?.status || "Unknown";
+                const msg = modelError?.message || String(modelError);
+                lastError = msg;
+                console.error(`❌ Model ${model.name} failed (${status}):`, msg);
+
+                // If this isn't the last model, we send a notification to the frontend that we're switching
+                if (model !== models[models.length - 1]) {
+                    res.write(`data: ${JSON.stringify({
+                        warning: `Model ${model.name} busy, trying next...`,
+                        retry: true
+                    })}\n\n`);
                 }
             }
         }
 
+        if (!success) {
+            console.error("❌ All models failed. Last error:", lastError);
+            res.write(`data: ${JSON.stringify({ error: `All AI models are currently busy or rate-limited. Please try again in a few minutes. (Last error: ${lastError})` })}\n\n`);
+            res.end();
+        }
+
     } catch (error: any) {
-        const errMsg = error?.message || "Unknown error";
-        console.error("Chat error:", errMsg);
+        const errMsg = error?.message || "Internal server error";
+        console.error("Global Chat error:", errMsg);
         res.write(`data: ${JSON.stringify({ error: `Chat error: ${errMsg}` })}\n\n`);
         res.end();
     }
