@@ -104,12 +104,13 @@ app.post("/chat", async (req, res) => {
         ];
 
         const models = [
-            { name: "llama-3.1-8b-instant", maxTokens: 4000 },
-            { name: "llama-3.2-11b-vision-preview", maxTokens: 4000 },
-            { name: "llama-3.2-3b-preview", maxTokens: 4000 },
-            { name: "mixtral-8x7b-32768", maxTokens: 4000 },
-            { name: "llama3-8b-8192", maxTokens: 4000 },
-            { name: "llama-3.3-70b-versatile", maxTokens: 4000 },
+            { name: "llama-3.1-8b-instant", maxTokens: 3000 },
+            { name: "mixtral-8x7b-32768", maxTokens: 3000 },
+            { name: "gemma2-9b-it", maxTokens: 3000 },
+            { name: "llama-3.2-11b-vision-preview", maxTokens: 3000 },
+            { name: "llama-3.2-3b-preview", maxTokens: 3000 },
+            { name: "llama3-8b-8192", maxTokens: 3000 },
+            { name: "llama-3.3-70b-versatile", maxTokens: 3000 },
         ];
 
         let success = false;
