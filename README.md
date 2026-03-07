@@ -18,3 +18,38 @@ The core API service for the AI Web Builder platform, responsible for orchestrat
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
 - **Environment Management**: [dotenv](https://github.com/motdotla/dotenv)
 - **Development Tools**: nodemon, ts-node
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- npm or yarn
+- Groq API Key
+
+### Installation
+
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/shekhar-narayan-mishra/Ai-web-builder-backend.git
+    cd Ai-web-builder-backend
+    ```
+
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
+
+3.  Environment Configuration:
+    Create a `.env` file in the root directory and add your Groq API key:
+    ```env
+    GROQ_API_KEY=your_api_key_here
+    PORT=3000
+    ```
+
+4.  Start the development server:
+    ```bash
+    npm run dev
+    ```
+
+5.  The server will be running at `http://localhost:3000`.
