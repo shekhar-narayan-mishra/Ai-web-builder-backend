@@ -53,3 +53,15 @@ The core API service for the AI Web Builder platform, responsible for orchestrat
     ```
 
 5.  The server will be running at `http://localhost:3000`.
+
+## Project Structure
+
+```text
+src/
+├── defaults/       # Initial project templates and configurations
+├── constants.ts    # Global constants and project settings
+├── gemini-config.ts # AI model configurations (Gemini/Groq)
+├── index.ts        # Main Express server entry point
+├── prompts.ts      # System prompts for AI generation
+└── stripindents.ts # Utility for cleaning up AI-generated responses
+```
