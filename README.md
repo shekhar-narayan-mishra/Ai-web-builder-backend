@@ -65,3 +65,11 @@ src/
 ├── prompts.ts      # System prompts for AI generation
 └── stripindents.ts # Utility for cleaning up AI-generated responses
 ```
+
+## License
+
+This project is licensed under the ISC License.
+
+## Contact
+
+For questions or support, please open an issue in the repository.
