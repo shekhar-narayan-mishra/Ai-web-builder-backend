@@ -73,3 +73,4 @@ This project is licensed under the ISC License.
 ## Contact
 
 For questions or support, please open an issue in the repository.
+
