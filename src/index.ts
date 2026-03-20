@@ -46,36 +46,65 @@ const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY
 });
 
+const MODELS = [
+    { name: "llama-3.1-8b-instant", maxTokens: 3000 },
+    { name: "mixtral-8x7b-32768", maxTokens: 3000 },
+    { name: "gemma2-9b-it", maxTokens: 3000 },
+    { name: "llama-3.2-11b-vision-preview", maxTokens: 3000 },
+    { name: "llama-3.2-3b-preview", maxTokens: 3000 },
+    { name: "llama3-8b-8192", maxTokens: 3000 },
+    { name: "llama-3.3-70b-versatile", maxTokens: 3000 },
+];
+
 app.post("/template", async (req, res) => {
     try {
         const prompt = req.body.prompt;
         if (!prompt) return res.status(400).json({ message: "Prompt required" });
 
-        const completion = await groq.chat.completions.create({
-            messages: [{
-                role: "system",
-                content: "Return 'node' or 'react' based on project. One word only."
-            }, {
-                role: "user",
-                content: prompt
-            }],
-            model: "llama-3.1-8b-instant",
-            max_tokens: 10,
-        });
+        let success = false;
+        let lastError = "";
 
-        const answer = completion.choices[0]?.message?.content?.trim().toLowerCase() || "react";
-        const isReact = answer.includes("react");
+        for (const model of MODELS) {
+            try {
+                console.log(`🤖 Attempting template classification with model: ${model.name}`);
+                const completion = await groq.chat.completions.create({
+                    messages: [{
+                        role: "system",
+                        content: "Return 'node' or 'react' based on project. One word only."
+                    }, {
+                        role: "user",
+                        content: prompt
+                    }],
+                    model: model.name,
+                    max_tokens: 10,
+                });
 
-        res.json({
-            prompts: [
-                `Base project: ${isReact ? 'react' : 'node'}. Instructions: ${isReact ? reactBasePrompt : nodeBasePrompt}`
-            ],
-            uiPrompts: [isReact ? reactBasePrompt : nodeBasePrompt]
-        });
+                const answer = completion.choices[0]?.message?.content?.trim().toLowerCase() || "react";
+                const isReact = answer.includes("react");
 
-    } catch (error) {
-        console.error("Template error:", error);
-        res.status(500).json({ message: "Template error" });
+                res.json({
+                    prompts: [
+                        `Base project: ${isReact ? 'react' : 'node'}. Instructions: ${isReact ? reactBasePrompt : nodeBasePrompt}`
+                    ],
+                    uiPrompts: [isReact ? reactBasePrompt : nodeBasePrompt]
+                });
+
+                success = true;
+                console.log(`✅ Template classification successful with ${model.name}`);
+                break;
+            } catch (modelError: any) {
+                lastError = modelError?.message || String(modelError);
+                console.error(`❌ Model ${model.name} failed for template:`, lastError);
+            }
+        }
+
+        if (!success) {
+            throw new Error(`All models failed for template. Last error: ${lastError}`);
+        }
+
+    } catch (error: any) {
+        console.error("Critical Template error:", error.message);
+        res.status(500).json({ message: "Template error", details: error.message });
     }
 });
 
@@ -103,20 +132,10 @@ app.post("/chat", async (req, res) => {
             }))
         ];
 
-        const models = [
-            { name: "llama-3.1-8b-instant", maxTokens: 3000 },
-            { name: "mixtral-8x7b-32768", maxTokens: 3000 },
-            { name: "gemma2-9b-it", maxTokens: 3000 },
-            { name: "llama-3.2-11b-vision-preview", maxTokens: 3000 },
-            { name: "llama-3.2-3b-preview", maxTokens: 3000 },
-            { name: "llama3-8b-8192", maxTokens: 3000 },
-            { name: "llama-3.3-70b-versatile", maxTokens: 3000 },
-        ];
-
         let success = false;
         let lastError = "";
 
-        for (const model of models) {
+        for (const model of MODELS) {
             try {
                 console.log(`🤖 Attempting stream with model: ${model.name}`);
 
@@ -152,7 +171,7 @@ app.post("/chat", async (req, res) => {
                 console.error(`❌ Model ${model.name} failed (${status}):`, msg);
 
                 // If this isn't the last model, we send a notification to the frontend that we're switching
-                if (model !== models[models.length - 1]) {
+                if (model !== MODELS[MODELS.length - 1]) {
                     res.write(`data: ${JSON.stringify({
                         warning: `Model ${model.name} busy, trying next...`,
                         retry: true
