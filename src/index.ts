@@ -47,13 +47,11 @@ const groq = new Groq({
 });
 
 const MODELS = [
-    { name: "llama-3.1-8b-instant", maxTokens: 3000 },
-    { name: "mixtral-8x7b-32768", maxTokens: 3000 },
-    { name: "gemma2-9b-it", maxTokens: 3000 },
-    { name: "llama-3.2-11b-vision-preview", maxTokens: 3000 },
-    { name: "llama-3.2-3b-preview", maxTokens: 3000 },
-    { name: "llama3-8b-8192", maxTokens: 3000 },
-    { name: "llama-3.3-70b-versatile", maxTokens: 3000 },
+    { name: "llama-3.3-70b-versatile", maxTokens: 8192 },
+    { name: "llama-3.1-8b-instant", maxTokens: 8192 },
+    { name: "mixtral-8x7b-32768", maxTokens: 32768 },
+    { name: "gemma2-9b-it", maxTokens: 8192 },
+    { name: "llama3-8b-8192", maxTokens: 8192 },
 ];
 
 app.post("/template", async (req, res) => {
@@ -70,7 +68,7 @@ app.post("/template", async (req, res) => {
                 const completion = await groq.chat.completions.create({
                     messages: [{
                         role: "system",
-                        content: "Return 'node' or 'react' based on project. One word only."
+                        content: "Return 'node' or 'react' based on project. If it is a website, UI, or frontend project, return 'react'. If it is a backend, API, or CLI tool, return 'node'. One word only."
                     }, {
                         role: "user",
                         content: prompt
@@ -93,8 +91,14 @@ app.post("/template", async (req, res) => {
                 console.log(`✅ Template classification successful with ${model.name}`);
                 break;
             } catch (modelError: any) {
+                const status = modelError?.status || "Unknown";
                 lastError = modelError?.message || String(modelError);
-                console.error(`❌ Model ${model.name} failed for template:`, lastError);
+                console.error(`❌ Model ${model.name} failed for template (${status}):`, lastError);
+                
+                // If it's an authentication error, don't bother trying other models
+                if (status === 401) {
+                    throw new Error("Invalid Groq API Key. Please check your GROQ_API_KEY environment variable.");
+                }
             }
         }
 
@@ -104,7 +108,11 @@ app.post("/template", async (req, res) => {
 
     } catch (error: any) {
         console.error("Critical Template error:", error.message);
-        res.status(500).json({ message: "Template error", details: error.message });
+        res.status(500).json({ 
+            message: "Template error", 
+            details: error.message,
+            hint: error.message.includes("API Key") ? "Check your GROQ_API_KEY" : "Try again in a few minutes"
+        });
     }
 });
 
@@ -170,10 +178,17 @@ app.post("/chat", async (req, res) => {
                 lastError = msg;
                 console.error(`❌ Model ${model.name} failed (${status}):`, msg);
 
+                // If it's an authentication error, don't bother trying other models
+                if (status === 401) {
+                    res.write(`data: ${JSON.stringify({ error: "Invalid Groq API Key. Please check your GROQ_API_KEY environment variable.", status: 401 })}\n\n`);
+                    res.end();
+                    return;
+                }
+
                 // If this isn't the last model, we send a notification to the frontend that we're switching
                 if (model !== MODELS[MODELS.length - 1]) {
                     res.write(`data: ${JSON.stringify({
-                        warning: `Model ${model.name} busy, trying next...`,
+                        warning: `Model ${model.name} ${status === 429 ? 'rate-limited' : 'busy'}, trying next...`,
                         retry: true
                     })}\n\n`);
                 }
@@ -182,7 +197,7 @@ app.post("/chat", async (req, res) => {
 
         if (!success) {
             console.error("❌ All models failed. Last error:", lastError);
-            res.write(`data: ${JSON.stringify({ error: `All AI models are currently busy or rate-limited. Please try again in a few minutes. (Last error: ${lastError})` })}\n\n`);
+            res.write(`data: ${JSON.stringify({ error: `All AI models are currently busy or rate-limited. (Last error: ${lastError})` })}\n\n`);
             res.end();
         }
 
