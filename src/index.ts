@@ -48,11 +48,12 @@ const groq = new Groq({
 
 const MODELS = [
     { name: "llama-3.3-70b-versatile", maxTokens: 8192 },
+    { name: "llama-3.1-70b-versatile", maxTokens: 8192 },
     { name: "llama-3.1-8b-instant", maxTokens: 8192 },
-    { name: "mixtral-8x7b-32768", maxTokens: 32768 },
     { name: "gemma2-9b-it", maxTokens: 8192 },
-    { name: "llama3-8b-8192", maxTokens: 8192 },
 ];
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 app.post("/template", async (req, res) => {
     try {
@@ -65,20 +66,34 @@ app.post("/template", async (req, res) => {
         for (const model of MODELS) {
             try {
                 console.log(`🤖 Attempting template classification with model: ${model.name}`);
-                const completion = await groq.chat.completions.create({
-                    messages: [{
-                        role: "system",
-                        content: "Return 'node' or 'react' based on project. If it is a website, UI, or frontend project, return 'react'. If it is a backend, API, or CLI tool, return 'node'. One word only."
-                    }, {
-                        role: "user",
-                        content: prompt
-                    }],
-                    model: model.name,
-                    max_tokens: 10,
-                });
+                
+                // Add delay between retries (skip first attempt)
+                const modelIndex = MODELS.indexOf(model);
+                if (modelIndex > 0) {
+                    console.log(`⏳ Waiting 1s before trying ${model.name}...`);
+                    await delay(1000);
+                }
+
+                const completion = await Promise.race([
+                    groq.chat.completions.create({
+                        messages: [{
+                            role: "system",
+                            content: "Classify the project type. Return ONLY the single word 'react' or 'node'.\n\nReturn 'react' for: ANY website, landing page, portfolio, dashboard, UI, frontend, web app, visual project, page with sections, blog, e-commerce site, form, gallery, or anything that a user would see in a browser.\n\nReturn 'node' ONLY for: pure backend APIs with no frontend, CLI command-line tools, scripts, or server-only utilities with no UI at all.\n\nWhen in doubt, ALWAYS return 'react'."
+                        }, {
+                            role: "user",
+                            content: prompt
+                        }],
+                        model: model.name,
+                        max_tokens: 10,
+                    }),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out after 15s')), 15000))
+                ]) as any;
 
                 const answer = completion.choices[0]?.message?.content?.trim().toLowerCase() || "react";
-                const isReact = answer.includes("react");
+                
+                // Keyword-based override: if the prompt mentions any visual/website terms, force react
+                const frontendKeywords = /\b(website|landing|page|portfolio|hero|section|dashboard|ui|frontend|blog|gallery|form|card|button|header|footer|nav|sidebar|layout|responsive|design|theme|dark.?mode|animation|image|photo|video|carousel|slider|modal|popup|menu|tab|accordion|table|chart|graph|login|signup|register|profile|checkout|cart|shop|store|e.?commerce|social|feed|chat|todo|calculator|weather|clock|timer|game|quiz|survey)\b/i;
+                const isReact = frontendKeywords.test(prompt) || answer.includes("react");
 
                 res.json({
                     prompts: [
@@ -146,6 +161,13 @@ app.post("/chat", async (req, res) => {
         for (const model of MODELS) {
             try {
                 console.log(`🤖 Attempting stream with model: ${model.name}`);
+
+                // Add delay between retries (skip first attempt)
+                const modelIndex = MODELS.indexOf(model);
+                if (modelIndex > 0) {
+                    console.log(`⏳ Waiting 1s before trying ${model.name}...`);
+                    await delay(1000);
+                }
 
                 // Send an initial event with the model name so frontend knows what is happening
                 res.write(`data: ${JSON.stringify({ model: model.name, status: "starting" })}\n\n`);
