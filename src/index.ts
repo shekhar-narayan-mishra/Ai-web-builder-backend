@@ -40,7 +40,9 @@ if (!process.env.GROQ_API_KEY) {
     process.exit(1);
 }
 
-console.log("Groq API Key found");
+const keyPrefix = process.env.GROQ_API_KEY.substring(0, 8);
+const keyLen = process.env.GROQ_API_KEY.length;
+console.log(`Groq API Key found (${keyPrefix}... length=${keyLen})`);
 
 const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY
@@ -237,6 +239,32 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
     res.json({ status: "OK" });
+});
+
+app.get("/debug", async (req, res) => {
+    const keyPrefix = process.env.GROQ_API_KEY?.substring(0, 8) || "NOT SET";
+    const keyLen = process.env.GROQ_API_KEY?.length || 0;
+    try {
+        const test = await groq.chat.completions.create({
+            messages: [{ role: "user", content: "Say OK" }],
+            model: "llama-3.1-8b-instant",
+            max_tokens: 3,
+        });
+        res.json({ 
+            keyPrefix: keyPrefix + "...", 
+            keyLength: keyLen,
+            groqTest: "SUCCESS", 
+            response: test.choices[0]?.message?.content 
+        });
+    } catch (err: any) {
+        res.json({ 
+            keyPrefix: keyPrefix + "...", 
+            keyLength: keyLen,
+            groqTest: "FAILED", 
+            error: err.message,
+            status: err.status || "unknown"
+        });
+    }
 });
 
 const PORT = process.env.PORT || 3000;
